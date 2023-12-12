@@ -26,8 +26,6 @@ const NEIGHBOURS = [
     [0,-1],
 ];
 
-const DIAG_NEIGHBOURS = [-1,0,1].flatMap(y => [-1,0,1].map(x => [y,x]).filter(([y,x]) => !(y===0&&x===0)));
-
 const isInBounds = ([y,x]) => (y>=0 && y<height && x>=0 && x<width);
 
 const displaySymbol = (symbol) => {
@@ -39,10 +37,15 @@ const displaySymbol = (symbol) => {
     if (symbol === "F") return "┌";
     return symbol;
 }
-function drawMap(map) {
+function drawMap(map, toFile=false) {
     let prefixWidth = map.length.toString().length;
+    let lines = [];
     for (let i = map.length-1; i >= 0; i--)
-        console.log(i.toString().padStart(prefixWidth), map[i].map(displaySymbol).join(''));
+        lines.push(i.toString().padStart(prefixWidth) + ' ' + map[i].map(displaySymbol).join(''));
+
+    lines.forEach(line => console.log(line));
+
+    if (toFile) fs.writeFileSync(path.join(__dirname, "solution.map"), lines.join('\n'));
 }
 
 function findStartPosition(map) {
@@ -57,10 +60,6 @@ function findStartPosition(map) {
 function isConnected([y1,x1], [y2, x2], map) {
     // bounds check
     if (!isInBounds([y1,x1]) || !isInBounds([y2,x2])) return false;
-    // if (y1 >= height || y2 >= height) return false;
-    // if (y1 < 0 || y2 < 0) return false;
-    // if (x1 >= width || x2 >= width) return false;
-    // if (x1 < 0 || x2 < 0) return false;
     if (Math.abs(y2-y1) + Math.abs(x2-x1) !== 1)
         throw Error("Comparing non-neighbour nodes...");
 
@@ -102,8 +101,6 @@ function buildLoopMap(rawMap) {
     let distances = map.map(r => r.slice().map(() => -1));
     distances[y0][x0] = 0;
     let maxDistance = 0;
-
-
 
     drawMap(rawMap);
     // drawMap(map);
@@ -154,31 +151,10 @@ function leftOrRight([dy1,dx1],[dy2,dx2]) {
     // return "S";
 }
 
-// function getPosition([dy,dx], side) {
-//     if (side === LEFT) return [dx, -dy || 0];
-//     if (side === RIGHT) return [-dx || 0, dy];
-//     return [dy,dx];
-// }
-
-function getPosition([dy,dx], side, includeDiagonal=false) {
-    let newDy, newDx;
-    if (side === LEFT) [newDy, newDx] = [dx, -dy || 0];
-    if (side === RIGHT) [newDy, newDx] = [-dx || 0, dy];
-
-    if (!includeDiagonal) return [[newDy, newDx]];
-
-    if (newDy === 0)
-        return [
-            [-1, newDx],
-            [0, newDx],
-            [1, newDx],
-        ];
-    else
-        return [
-            [newDy, -1],
-            [newDy, 0],
-            [newDy, 1],
-        ];
+function getPosition([dy,dx], side) {
+    if (side === LEFT) return [dx, -dy || 0];
+    if (side === RIGHT) return [-dx || 0, dy];
+    return [dy,dx];
 }
 
 
@@ -243,15 +219,16 @@ function findLoopRoute() {
     [dy,dx] = startDirection; // Reset start direction
     const insideDirection = (leftTurns > rightTurns) ? LEFT : RIGHT;
     do {
+        const [dy_o, dx_o] = [dy, dx]; // cache old direction for bends.
         [[y,x], [dy,dx]] = getNextDirection([y,x], [dy,dx]);
-        // const [dy_n, dx_n] = getPosition([dy,dx], insideDirection); // Get position of neighbour on "inside"
-        const insideNeighbours = getPosition([dy,dx], insideDirection); // Get position of neighbour on "inside"
-        insideNeighbours.forEach(([dy_n, dx_n]) => {
+        [[dy,dx], [dy_o,dx_o]].forEach(([dy,dx]) => {
+            const [dy_n, dx_n] = getPosition([dy,dx], insideDirection); // Get position of neighbour on "inside"
             if (isInBounds([y+dy_n, x+dx_n]) && cleanMap[y+dy_n][x+dx_n] === ".") {
                 cleanMap[y+dy_n][x+dx_n] = "I";
                 // drawMap(cleanMap);
             }
-        })
+        });
+
     } while (y !== y0 || x !== x0)
     drawMap(cleanMap);
 
@@ -272,7 +249,7 @@ function findLoopRoute() {
     let insideTiles = frontier.size;
     while (frontier.size > 0) {
         const [y,x] = getNext();
-        DIAG_NEIGHBOURS
+        NEIGHBOURS
             .filter(([dy,dx]) => cleanMap[y+dy][x+dx] === '.')
             .forEach(([dy,dx]) => {
                 cleanMap[y+dy][x+dx] = "I";
@@ -282,10 +259,7 @@ function findLoopRoute() {
     }
     console.log(insideTiles);
 
-    drawMap(cleanMap);
-
-    const total_I = cleanMap.reduce((t, r) => t + r.reduce((st, c) => (st + (c==="I" ? 1 : 0)), 0), 0)
-    console.log(total_I);
+    drawMap(cleanMap, toFile=true);
 }
 
 findLoopRoute();
